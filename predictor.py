@@ -17,8 +17,8 @@ import warnings
 warnings.filterwarnings("ignore")
 
 #authentication for praw
-my_client_id = "-vOTMtJazmzppQ"
-my_client_secret = "_cXn_GBKUTHrDPGsZxjQOV9Vz-A"
+my_client_id = "your_client_id"
+my_client_secret = "your_client_secret"
 my_user_agent = "web:scraper.v0 (by u/skeet__)"
 
 #_____FUNCTIONS_____#
