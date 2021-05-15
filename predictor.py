@@ -98,10 +98,10 @@ def getSentiment(companyName):
     #get sentiment for each headline
     df['News'] = df['News'].apply(lambda News: TextBlob(News).sentiment)
     #remove headlines that are completely neutral
-    df_filtered = df[df['News'] != (0.0, 0.0)]
+    df = df[df['News'] != (0.0, 0.0)]
     #split the sentiment tuple (polarity, subjectivity) into two columns
-    df_sentiment = pd.DataFrame(data=df_filtered['Date'])
-    df_sentiment[['polarity', 'subjectivity']] = pd.DataFrame(df_filtered['News'].tolist(), index=df_filtered.index)
+    df_sentiment = pd.DataFrame(data=df['Date'])
+    df_sentiment[['polarity', 'subjectivity']] = pd.DataFrame(df['News'].tolist(), index=df.index)
     #make a reddit instance to get news
     reddit = praw.Reddit(client_id=my_client_id, client_secret=my_client_secret, user_agent=my_user_agent)
     #subreddit to search - all
@@ -116,10 +116,10 @@ def getSentiment(companyName):
             #get the sentiment for the post
             sentiments.append((datetime.utcfromtimestamp(submission.created_utc).strftime('%Y-%m-%d') ,
                               TextBlob(submission.title).sentiment))
-        company_sentiments = pd.DataFrame(sentiments)
+    company_sentiments = pd.DataFrame(sentiments)
     company_filtered = company_sentiments[company_sentiments[1] != (0.0, 0.0)]
     #split the sentiment tuple (polarity, subjectivity) into two columns
-    company_df = pd.DataFrame(data=company_filtered[0])
+    company_df = pd.DataFrame(data=company_sentiments[0])
     company_df[['polarity', 'subjectivity']] = pd.DataFrame(company_filtered[1].tolist(), index=company_filtered.index)
     old_sentiments = pd.concat([df_sentiment, company_df])
     #get the mean sentiment for each day
@@ -155,34 +155,33 @@ def getSentiment(companyName):
 def splitDataSet(dataset):
     #train/test split will be 80/20
     training_data_len = math.ceil(len(dataset)*.75)
-    training_data_len
-
-    #Scale the data
-    scaler = MinMaxScaler(feature_range=(0,1))
-    scaled_data = scaler.fit_transform(dataset)
-
-    #Scaling the Close Column
-    scaler_pred = MinMaxScaler()
-    scaler_pred_data = scaler_pred.fit_transform(dataset[:, 0:1])
-
+    
     #Create train dataset
-    train_data = scaled_data[0:training_data_len]
+    train_data = dataset[0:training_data_len]
+    #create test dataset
+    test_data = dataset[training_data_len-60:]
+    
+    #Scale the data
+    train_scaler = MinMaxScaler(feature_range=(0,1))
+    test_scaler = MinMaxScaler()
+    scaled_train = train_scaler.fit_transform(train_data)
+    scaled_test = test_scaler.fit_transform(test_data)
+     
     X_train = []
     y_train = []
     for i in range(60, len(train_data)):
-        X_train.append(train_data[i-60:i])
-        y_train.append(train_data[i, 0])
+        X_train.append(scaled_train[i-60:i])
+        y_train.append(scaled_train[i, 0])
     X_train, y_train = np.array(X_train), np.array(y_train)
 
-    #create test dataset
-    test_data = scaled_data[training_data_len-60:]
     X_test = []
     y_test = []
     for i in range(60, test_data.shape[0]):
-        X_test.append(test_data[i-60:i])
-        y_test.append(test_data[i, 0])
+        X_test.append(scaled_test[i-60:i])
+        y_test.append(scaled_test[i, 0])
     X_test, y_test = np.array(X_test), np.array(y_test)
-    return [X_test, y_test, X_train, y_train, scaler_pred]
+    
+    return [X_test, y_test, X_train, y_train, test_scaler]
 
 #LSTM model
 def makeModel(X_train):
@@ -206,18 +205,20 @@ def makeModel(X_train):
     model.compile(optimizer='adam', loss = 'mean_squared_error')
     return model
 
-def getyhat(dataset, scaler_pred):
+def getyhat(dataset, test_scaler):
         
     test_index = dataset.iloc[-y_test.shape[0]:].index
     test_index = test_index+timedelta(1)
     y_test_reshaped = np.reshape(y_test,(y_test.shape[0], 1))
-    y_test_unscaled = scaler_pred.inverse_transform(y_test_reshaped)
+    test_unscaler = MinMaxScaler()
+    test_unscaler.min_, test_unscaler.scale_ = test_scaler.min_[0], test_scaler.scale_[0]
+    y_test_unscaled = test_unscaler.inverse_transform(y_test_reshaped)
     y_test_df = pd.DataFrame(data=y_test_unscaled, columns=['Close']).set_index(test_index)
     
     yhat = model.predict(X_test)
-    yhat_unscaled = scaler_pred.inverse_transform(yhat)
+    yhat_unscaled = test_unscaler.inverse_transform(yhat)
     yhat_df = pd.DataFrame(data=yhat_unscaled, columns=['Close']).set_index(test_index)
-    return [yhat, yhat_unscaled,yhat_df, y_test_df]
+    return [yhat ,yhat_df, y_test_df]
 
 def plotLoss(hist):
     # plot loss
@@ -267,7 +268,7 @@ else:
 dataset = full.to_numpy()
 
 #set up data sets
-X_test, y_test, X_train, y_train, scaler_pred = splitDataSet(dataset)
+X_test, y_test, X_train, y_train, test_scaler = splitDataSet(dataset)
 
 #set up model
 model = makeModel(X_train)
@@ -275,7 +276,7 @@ model.summary()
 
 #train model
 print("training model...")
-hist = model.fit(X_train, y_train, epochs=5, batch_size=32, validation_data = (X_test, y_test))
+hist = model.fit(X_train, y_train, epochs=5, batch_size=60, validation_data = (X_test, y_test))
 
 #plot loss
 print("loss plot")
