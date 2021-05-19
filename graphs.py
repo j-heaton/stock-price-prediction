@@ -17,8 +17,8 @@ def ti_table(df):
     return dash_table.DataTable(columns=cols, data=data, style_cell_conditional=scc, style_as_list_view=True, style_cell=style_cell, style_header=style_header)
     
 def plot_price(df):
-    opens = px.line(df, x=df.index, y=df['Open'], height=500)
-    opens.update_layout(
+    closes = px.line(df, x=df.index, y=df['Close'], height=500)
+    closes.update_layout(
         title={'text':'History',
            'y':0.95,
            'x':0.5,
@@ -53,7 +53,7 @@ def plot_price(df):
             type="date"
         )
     )
-    return opens
+    return closes
     
 def plot_candlesticks(df):
     #candlestick chart - each day's prices are described by a 'candlestick' rather than a single point

@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 import yfinance as yf
 
-def fetch_data(stock):
+def fetch_data(ticker):
     #current time
     now = datetime.now()
     #the time when market closes
@@ -10,8 +10,8 @@ def fetch_data(stock):
     if now >= market_open:
         day = (datetime.today()+timedelta(1)).strftime("%Y-%m-%d")
     else:
-        day = datetime.today()+timedelta(1).strftime("%Y-%m-%d")
-    return yf.download(stock, start="2008-06-07", end = day)
+        day = (datetime.today()+timedelta(1)).strftime("%Y-%m-%d")
+    return yf.download(ticker, start="2008-06-07", end = day)
     
 def calculate_technical_indicators(data):
     #we use adjusted close to calculate RSI
